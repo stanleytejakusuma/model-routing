@@ -202,15 +202,25 @@ def main() -> int:
     if not (rc == 2 and intent_path.with_name(f"{intent_path.name}.invalidated").exists()):
         fails.append(f"state-none-downgrade rc={rc}")
 
+    # 15. a classify-time exception (here: unreadable registry) must fail CLOSED
+    # in enforce so a crafted crash cannot slip the gate, and stay log-only in shadow.
+    bad_reg_env = {**base_env, "MODEL_ROUTING_REGISTRY": str(tmp / "no-such-registry.json")}
+    rc, so, se = run_hook(capital_event, "enforce", bad_reg_env)
+    if rc != 2:
+        fails.append(f"classify-error-enforce-failclosed rc={rc} (want 2)")
+    rc, so, se = run_hook(capital_event, "shadow", bad_reg_env)
+    if rc != 0:
+        fails.append(f"classify-error-shadow-allow rc={rc} (want 0)")
+
     if fails:
         print("HOOK-ISOLATION: FAIL")
         for f in fails:
             print("  -", f)
         return 1
-    print("HOOK-ISOLATION: PASS (14/14: shadow-allow, noncapital-allow, fail-open, "
+    print("HOOK-ISOLATION: PASS (15/15: shadow-allow, noncapital-allow, fail-open, "
           "enforce-block, no-drift-allow+consume, reblock-after-consume, enforce-noncapital-allow, "
           "commit-drift, unstaged-drift, untracked-add, untracked-delete, drift-revert, "
-          "repo-free-none, none-downgrade)")
+          "repo-free-none, none-downgrade, classify-error-failclosed)")
     return 0
 
 

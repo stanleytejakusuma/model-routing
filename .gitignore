@@ -2,3 +2,9 @@ __pycache__/
 *.py[cod]
 .pytest_cache/
 .DS_Store
+
+# local runtime artifacts (never publish)
+data/
+*.db
+*.db-shm
+*.db-wal

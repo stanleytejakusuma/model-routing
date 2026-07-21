@@ -159,7 +159,12 @@ def main() -> int:
         c = classify_tool_call(tool_name, payload, cwd, registry, host=str(event.get("host", "local")))
     except Exception as e:
         log({"event": "classify-error", "tool": tool_name, "err": str(e)})
-        return allow("classify-failed-fail-open")
+        # Cannot prove this call is non-capital. A crafted input that crashes the
+        # classifier must not slip the gate, so enforce mode fails CLOSED here.
+        # Shadow mode keeps its never-block contract (log-only).
+        if MODE == "enforce":
+            return block("classify-failed-fail-closed")
+        return allow("classify-failed-shadow")
 
     if c.is_read_only or not c.is_capital:
         return allow("not-capital-mutation")

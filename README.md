@@ -2,7 +2,7 @@
 
 A capital-action gate for LLM agents. An agent that can run shell commands should never be able to fire an irreversible action on its own: restart a live trading signer, place an exchange order, read a signing key, move funds. This system classifies every proposed tool call, blocks anything capital-shaped, and only lets the action through when a signed, single-use intent exists that is bound to that exact action and has been approved by an independent LLM reviewer and confirmed by a human.
 
-The code here is the real enforcement stack I run in front of a coding agent that works inside repos which control live trading capital. Hostnames, paths, and service names in the configs and corpora are fictional stand-ins; the logic, tests, and red-team corpus are the real thing.
+The code here is the real enforcement stack I run in front of a coding agent that works inside repos which control live trading capital. Hostnames, paths, and service names in the configs and corpora are fictional stand-ins; the logic, tests, and red-team corpus are the real thing. It was extracted and sanitized from private infrastructure and published as a single squashed commit, so the history here is deliberately not the original.
 
 The core bet: authoring code is reversible, so the agent edits capital-repo source freely. Executing a live-capital trigger is not reversible, so that single class of action routes through cryptographic authorization with a human at the end of the chain.
 
@@ -54,13 +54,13 @@ execution gate                                     scripts/pretooluse_hook.py
 
 The classifier is triggers-only. It does not gate by directory or by vibes. An action is capital only if it matches an enumerated trigger: secret, key, or vault access (read or write), a registered capital-service mutation, a mutating HTTP call to a registered live exchange host, or a transfer-shaped operation naming a registered capital address. Everything else, including edits to capital-repo source files and dev commands run inside capital repos, passes without ceremony. Bash commands are scanned in full so a trigger cannot be smuggled by position or shell wrapping.
 
-The intent record binds 16 fields, including the exact action string, cwd, repo id, host, target, risk class, reviewer identity, policy version, the reviewed tree SHA, a nonce, and an expiry. Verification checks the signature over canonical JSON, then requires exact equality on every binding field against the action actually being executed. Change one character of the command and verification fails with `binding-mismatch:exact_action`.
+The signed record has 16 fields and the Ed25519 signature covers all of them, so altering any one breaks the signature. Verification then enforces exact equality on the 7 that bind an intent to one specific live action: `action_type`, `exact_action`, `cwd`, `repo_id`, `host`, `target`, and `risk_class`. Change one character of the command and verification fails with `binding-mismatch:exact_action`. The rest are enforced by their own dedicated checks rather than plain equality: the reviewed tree SHA by state binding, the expiry by the clock, the nonce by the replay store.
 
 Replay protection is a directory-backed nonce store where `O_EXCL` file creation is the commit. It is race-safe: the test fires 8 concurrent verifications of the same signed intent and exactly 1 wins, 7 get `nonce-replay`.
 
-State binding kills approval-then-drift. The approval records a git tree SHA computed through a temporary index, so tracked edits, untracked additions, and deletions all change the hash. At execution time the hook recomputes it; drift invalidates the pending intent on disk and blocks. Reverting the drift byte-for-byte restores the hash and the intent works again. All 14 hook isolation checks, including commit drift, unstaged drift, untracked add, untracked delete, and drift-then-revert, run in `scripts/test_hook_isolation.py`.
+State binding kills approval-then-drift. The approval records a git tree SHA computed through a temporary index, so tracked edits, untracked additions, and deletions all change the hash. At execution time the hook recomputes it; drift invalidates the pending intent on disk and blocks. Reverting the drift byte-for-byte restores the hash and the intent works again. All 15 hook isolation checks, including commit drift, unstaged drift, untracked add, untracked delete, and drift-then-revert, run in `scripts/test_hook_isolation.py`.
 
-Failure posture is layered and deliberate. The LLM review, the signing path, and the intent verification fail closed on every error class. The local PreToolUse hook fails open on internal errors (bad stdin, missing config) so a hook bug cannot wedge every tool call in every session, but once an action classifies as a capital mutation in enforce mode, any error in intent checking or state verification fails closed. The kill switch is split: `DISABLE_MODEL_ROUTING=1` can turn off non-capital routing, and no environment variable can disable the capital gate. Bypass requires an expiring break-glass record with a written reason, a named human, and an audit log path.
+Failure posture is layered and deliberate. The LLM review, the signing path, and the intent verification fail closed on every error class. The local PreToolUse hook fails open only on harness-level errors that would otherwise wedge every call in the session (an unreadable event on stdin). But a failure to *classify* an action fails closed in enforce mode: an input crafted to crash the classifier is treated as capital and blocked, never waved through, because the gate cannot prove an unclassifiable action is safe. Once an action classifies as a capital mutation, any error in intent checking or state verification also fails closed. The kill switch is split: `DISABLE_MODEL_ROUTING=1` can turn off non-capital routing, and no environment variable can disable the capital gate. Bypass requires an expiring break-glass record with a written reason, a named human, and an audit log path.
 
 ## The red-team harness and what it caught
 
@@ -71,7 +71,7 @@ cases=59 known_bad=43 detected_bad=43 known_good=16 allowed_good=16
 recall=1.000 precision=1.000 false_negative=0 false_positive=0
 ```
 
-The harness exits nonzero on any false negative, so it works as a CI gate. Three findings from running it against earlier versions of the classifier shaped the current design:
+What this measures, and what it does not. The corpus is a **regression gate**, not a benchmark score to admire: every historical bypass and every false positive it ever caught must stay caught, and any single false negative fails the build. Two honest caveats. The reviewer verdicts baked into the corpus are canned, so these numbers exercise the **deterministic pipeline** (classifier, binding, nonce store, state hash), not the live LLM reviewer, which is tested separately. And a corpus I wrote myself can only prove non-regression against attacks I already thought of, never the absence of ones I did not. That gap is exactly what shadow mode is for: it runs the classifier against real traffic to surface the cases the corpus never imagined. Three such cases, found by running the harness against earlier versions of the classifier, shaped the current design:
 
 1. The keywordless exchange order. A `curl -X POST` to a live exchange order endpoint with no trading vocabulary in the command slipped the first trigger set, which looked for words like "order" in the wrong places. The fix detects mutating-HTTP shape (method flags, data flags, order-path fragments) and requires the URL to hit a registered exchange host. Plain GETs to the same host, and downloads from data mirrors, stay free.
 
@@ -85,7 +85,7 @@ Nothing here arms itself. The path to enforcement:
 
 1. `scripts/shadow_runner.py` replays a corpus of realistic actions against the registry and prints would-allow and would-block with the reason chain, executing nothing.
 2. The hook installs in shadow mode first (`MODEL_ROUTING_MODE=shadow`, the default). It classifies live traffic and logs capital mutations it would have blocked, and never blocks. You read the log until the false-positive rate is boring.
-3. `scripts/test_hook_isolation.py` drives the hook as a subprocess with controlled stdin and env and asserts exit codes and side effects for all 14 scenarios before the hook goes anywhere near a live session.
+3. `scripts/test_hook_isolation.py` drives the hook as a subprocess with controlled stdin and env and asserts exit codes and side effects for all 15 scenarios before the hook goes anywhere near a live session.
 4. `scripts/dry_run_install.py` prints the install plan (key custody checks, nonce stores, non-agent-owned hook paths) and performs none of it.
 5. Enforce mode turns on only after the pre-arm checklist in `config/policy.json` passes: registry human-reviewed, key provisioned outside the agent workspace, break-glass audited, split kill-switch verified, red-team harness green.
 6. `scripts/gatekeeper_selftest.py` runs on the gatekeeper host with the deployed keys and proves classify, sign, verify, and replay-refusal end to end before the system is trusted.
@@ -115,7 +115,7 @@ scripts/
   gatekeeper_selftest.py       end-to-end sign / verify / replay-refusal selftest
   shadow_runner.py             log-only corpus replay
   redteam_harness.py           recall / precision harness, nonzero exit on any miss
-  test_hook_isolation.py       14-scenario subprocess test of the hook
+  test_hook_isolation.py       15-scenario subprocess test of the hook
   test_heredoc_canary.py       executes allowed authoring cases behind inert shims
   dry_run_install.py           print-only install plan
 config/
