@@ -1,0 +1,174 @@
+{
+  "policy_version": "example.v1",
+  "owner": "operator",
+  "defaults": {
+    "unknown_is_capital": false,
+    "unknown_rule": "Triggers-only: an action is capital ONLY if it matches an enumerated live-capital trigger (secret/key/vault access [read or write], capital-service mutation, live-exchange order, capital-address transfer/sign). Authoring capital-repo source, dev commands, and non-secret reads are non-capital. Unknown -> non-capital."
+  },
+  "capital_hosts": [
+    "prod-host-1",
+    "prod-host-2"
+  ],
+  "capital_network_targets": [
+    "api.exchange.example",
+    "futures.exchange.example"
+  ],
+  "repos": [
+    {
+      "id": "trading-engine",
+      "capital": true,
+      "paths": [
+        "/home/operator/repos/trading-engine",
+        "/home/operator/repos/trading-engine/packages/signer",
+        "/home/operator/repos/trading-engine/packages/keeper"
+      ],
+      "remotes": [],
+      "notes": "Capital monorepo: the live trading engine plus its signer and keeper packages."
+    },
+    {
+      "id": "research",
+      "capital": false,
+      "paths": [
+        "/home/operator/repos/research"
+      ],
+      "remotes": []
+    },
+    {
+      "id": "market-data",
+      "capital": false,
+      "paths": [
+        "/home/operator/repos/market-data"
+      ],
+      "remotes": []
+    },
+    {
+      "id": "tools",
+      "capital": false,
+      "paths": [
+        "/home/operator/repos/tools"
+      ],
+      "remotes": []
+    }
+  ],
+  "services": [
+    {
+      "name": "signer.service",
+      "capital": true,
+      "kind": "systemd-service",
+      "host": "prod-host-1",
+      "repo_path": "/home/operator/repos/trading-engine"
+    },
+    {
+      "name": "order-keeper.service",
+      "capital": true,
+      "kind": "systemd-service",
+      "host": "prod-host-2",
+      "repo_path": "/home/operator/repos/trading-engine"
+    },
+    {
+      "name": "cosigner-keeper.service",
+      "capital": true,
+      "kind": "systemd-service",
+      "host": "prod-host-2",
+      "repo_path": "/home/operator/repos/trading-engine"
+    },
+    {
+      "name": "vault_agent.service",
+      "capital": true,
+      "kind": "systemd-service",
+      "host": "prod-host-1"
+    },
+    {
+      "name": "live-trader",
+      "capital": true,
+      "kind": "docker-container",
+      "host": "prod-host-1",
+      "repo_path": "/home/operator/repos/trading-engine"
+    },
+    {
+      "name": "order-router",
+      "capital": true,
+      "kind": "docker-container",
+      "host": "prod-host-1",
+      "repo_path": "/home/operator/repos/trading-engine"
+    },
+    {
+      "match": "contains",
+      "pattern": "dashboard",
+      "capital": false,
+      "read_only": true
+    },
+    {
+      "match": "contains",
+      "pattern": "writer",
+      "capital": false,
+      "read_only": true
+    },
+    {
+      "match": "contains",
+      "pattern": "sync",
+      "capital": false,
+      "read_only": true
+    },
+    {
+      "match": "contains",
+      "pattern": "logrotate",
+      "capital": false,
+      "read_only": true
+    },
+    {
+      "match": "contains",
+      "pattern": "metrics-gateway",
+      "capital": false,
+      "read_only": true
+    }
+  ],
+  "vault_bundles": [
+    {
+      "name": "trading-engine",
+      "capital": true
+    },
+    {
+      "name": "live-trader",
+      "capital": true
+    }
+  ],
+  "vault_surfaces": [
+    {
+      "suffix": ".age",
+      "capital": true
+    },
+    {
+      "prefix": "vault-",
+      "capital": true
+    },
+    {
+      "path": "/opt/prod-signer",
+      "capital": true
+    },
+    {
+      "path": "/home/operator/.config/trading/signer-key",
+      "capital": true
+    }
+  ],
+  "addresses": [
+    {
+      "id": "trading-vault",
+      "env": "TRADING_VAULT_ADDRESS",
+      "capital": true
+    },
+    {
+      "id": "trading-cosigner",
+      "env": "TRADING_COSIGNER_ADDRESS",
+      "capital": true
+    },
+    {
+      "id": "trading-safe",
+      "env": "TRADING_SAFE_ADDRESS",
+      "capital": true
+    }
+  ],
+  "pre_blessed_commands": [
+    "systemctl restart signer.service"
+  ]
+}

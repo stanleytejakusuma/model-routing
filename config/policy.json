@@ -1,0 +1,49 @@
+{
+  "policy_version": "example.v1",
+  "capital_action_classes": [
+    "state-changing shell or SSH command against a capital service or host",
+    "vault or secret operation (read or write)",
+    "systemd or container restart of a capital service",
+    "deploy",
+    "rsync or scp into a capital surface",
+    "live exchange order",
+    "transaction, address, amount, session key, or signer command",
+    "manual advice the human will act on"
+  ],
+  "read_only_examples": [
+    "file read",
+    "search",
+    "docker ps",
+    "logs",
+    "status"
+  ],
+  "kill_switch": {
+    "non_capital_env": "DISABLE_MODEL_ROUTING=1",
+    "capital_env_bypass_allowed": false,
+    "capital_bypass": "expiring break-glass record with written reason, human confirmation, and audit log entry"
+  },
+  "intent_binding": [
+    "action_type",
+    "exact_action",
+    "cwd",
+    "repo_id",
+    "host",
+    "target",
+    "risk_class",
+    "rollback_path",
+    "verifier_identity",
+    "verifier_version",
+    "policy_version",
+    "tree_sha",
+    "parent_sha",
+    "timestamp",
+    "nonce"
+  ],
+  "pre_arm_checklist": [
+    "capital registry populated and human-reviewed",
+    "signing key provisioned outside the agent-writable workspace",
+    "break-glass audited",
+    "split kill-switch verified",
+    "red-team recall harness green"
+  ]
+}

@@ -1,0 +1,65 @@
+[
+  {
+    "case_id": "read-signer-status",
+    "description": "Read-only status probe of the registered capital signer service.",
+    "tool_name": "Bash",
+    "tool_input": {"command": "systemctl status signer.service"},
+    "cwd": "/home/operator/repos/trading-engine/packages/signer",
+    "host": "prod-host-1",
+    "opus_approved": false
+  },
+  {
+    "case_id": "approved-keeper-restart",
+    "description": "Approved inert replay of the registered keeper service restart surface.",
+    "tool_name": "Bash",
+    "tool_input": {"command": "systemctl restart order-keeper.service"},
+    "cwd": "/home/operator/repos/trading-engine/packages/keeper",
+    "host": "prod-host-2",
+    "opus_approved": true
+  },
+  {
+    "case_id": "unapproved-live-trader-container-restart",
+    "description": "Unapproved inert replay of the registered live trader docker container surface.",
+    "tool_name": "Bash",
+    "tool_input": {"command": "docker restart live-trader"},
+    "cwd": "/home/operator/repos/trading-engine",
+    "host": "prod-host-1",
+    "opus_approved": false
+  },
+  {
+    "case_id": "read-vault-age-file",
+    "description": "Read-only probe of a vault .age filename surface from a non-capital repo.",
+    "tool_name": "Bash",
+    "tool_input": {"command": "cat /home/operator/repos/market-data/config/local-vault.age"},
+    "cwd": "/home/operator/repos/market-data",
+    "host": "local",
+    "opus_approved": false
+  },
+  {
+    "case_id": "read-address-env-name",
+    "description": "Read-only scan mentioning a capital address env-var name without hardcoding an address.",
+    "tool_name": "Bash",
+    "tool_input": {"command": "rg TRADING_SAFE_ADDRESS /home/operator/repos/research/docs"},
+    "cwd": "/home/operator/repos/research",
+    "host": "local",
+    "opus_approved": false
+  },
+  {
+    "case_id": "noncapital-repo-local-write",
+    "description": "Local write inside a registered non-capital repo remains non-capital in shadow replay.",
+    "tool_name": "Bash",
+    "tool_input": {"command": "touch shadow-marker.txt"},
+    "cwd": "/home/operator/repos/market-data",
+    "host": "local",
+    "opus_approved": false
+  },
+  {
+    "case_id": "noncapital-service-read",
+    "description": "Read-only probe of a non-capital service pattern from a non-capital repo.",
+    "tool_name": "Bash",
+    "tool_input": {"command": "systemctl status metrics-gateway.service"},
+    "cwd": "/home/operator/repos/tools",
+    "host": "local",
+    "opus_approved": false
+  }
+]

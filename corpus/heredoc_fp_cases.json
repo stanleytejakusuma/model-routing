@@ -1,0 +1,35 @@
+{
+  "_comment": "Test corpus for the strict heredoc-to-file classifier exclusion. Each case is an exact Bash command string and the REQUIRED classifier verdict. 'block' = must classify capital (a real or attempted-smuggled capital trigger). 'allow' = must classify non-capital (pure authoring). Every case uses the registered capital service below. These are adversarial test vectors for the capital gate, NOT scripts to execute except inside the hermetic canary harness with shimmed inert systemctl/docker.",
+  "service": "signer.service",
+  "must_block": [
+    {"id": "b1_interp_after_write", "cmd": "cat > f <<'EOF'\nsystemctl restart signer.service\nEOF\nbash f", "why": "interpreter executes the written file after the heredoc"},
+    {"id": "b2a_pathexec_and", "cmd": "cat > f <<'EOF'\nsystemctl restart signer.service\nEOF && ./f", "why": "path-exec after write, no interpreter token"},
+    {"id": "b2b_chmod_exec", "cmd": "cat > f <<'EOF'\nsystemctl restart signer.service\nEOF; chmod +x f; ./f", "why": "chmod+exec executor, no interpreter denylist token"},
+    {"id": "b3_dotsource", "cmd": "cat > f <<'EOF'\nsystemctl restart signer.service\nEOF; . f", "why": "POSIX dot-source executes the file"},
+    {"id": "b4a_exec", "cmd": "cat > f <<'EOF'\nsystemctl restart signer.service\nEOF; exec ./f", "why": "exec executor"},
+    {"id": "b4b_background", "cmd": "cat > f <<'EOF'\nsystemctl restart signer.service\nEOF & ./f", "why": "background + exec"},
+    {"id": "b5_trigger_outside_body", "cmd": "cat > f <<'EOF'\nhello\nEOF; systemctl restart signer.service", "why": "real trigger is a second command, outside the heredoc body"},
+    {"id": "b6_tee_pipe_bash", "cmd": "tee f <<'EOF'\nsystemctl restart signer.service\nEOF | bash", "why": "pipe to interpreter; tee is also an unsupported sink"},
+    {"id": "b7_ssh_remote_exec", "cmd": "ssh build-host 'bash -s' <<'EOF'\nsystemctl restart signer.service\nEOF", "why": "remote execution via ssh + heredoc"},
+    {"id": "b8a_bash_sink", "cmd": "bash <<'EOF'\nsystemctl restart signer.service\nEOF", "why": "heredoc fed directly to bash"},
+    {"id": "b8b_python_sink", "cmd": "python - <<'EOF'\nimport os; os.system('systemctl restart signer.service')\nEOF", "why": "heredoc fed to python"},
+    {"id": "b9a_unquoted_cmdsub", "cmd": "cat > f <<EOF\n$(systemctl restart signer.service)\nEOF", "why": "unquoted delimiter -> command substitution executes at write time"},
+    {"id": "b9b_backtick_cmdsub", "cmd": "cat > f <<EOF\n`systemctl restart signer.service`\nEOF", "why": "backtick command substitution, unquoted delimiter"},
+    {"id": "b10_dash_overextend", "cmd": "cat > f <<-EOF\n\thello\n\tEOF\nsystemctl restart signer.service", "why": "<<- tab-dedent terminator; naive parser over-extends body and hides the real trigger on the next line"},
+    {"id": "b11a_delim_trailing_space", "cmd": "cat > f <<'EOF'\nhello\nEOF \nsystemctl restart signer.service", "why": "body line 'EOF ' (trailing space) is NOT the terminator; trigger after true terminator must be seen"},
+    {"id": "b11b_delim_leading_space", "cmd": "cat > f <<'EOF'\nhello\n EOF\nEOF\nsystemctl restart signer.service", "why": "leading-space 'EOF' is not the terminator"},
+    {"id": "b12_two_heredocs", "cmd": "cat > a <<'X'\nhello\nX; bash <<'Y'\nsystemctl restart signer.service\nY", "why": "second heredoc feeds bash"},
+    {"id": "b13a_dev_stdin", "cmd": "cat > /dev/stdin <<'EOF'\nsystemctl restart signer.service\nEOF", "why": "non-regular sink"},
+    {"id": "b13b_proc_fd", "cmd": "cat > /proc/self/fd/1 <<'EOF'\nsystemctl restart signer.service\nEOF", "why": "non-regular sink"},
+    {"id": "b13c_symlink_sink", "cmd": "cat > link_to_exec <<'EOF'\nsystemctl restart signer.service\nEOF", "why": "sink is a symlink (stat check must reject exclusion); harness pre-creates link_to_exec as a symlink"},
+    {"id": "b14_variable_sink", "cmd": "cat > \"$F\" <<'EOF'\nsystemctl restart signer.service\nEOF", "why": "expanded/variable sink -> ambiguous target -> full scan"},
+    {"id": "b15_crontab_sink", "cmd": "crontab - <<'EOF'\nsystemctl restart signer.service\nEOF", "why": "non-cat sink (crontab) -> not excluded"},
+    {"id": "b16_herestring", "cmd": "bash <<< \"systemctl restart signer.service\"", "why": "herestring <<< must never match the << heredoc-exclusion path"},
+    {"id": "b17a_bare_systemctl", "cmd": "systemctl restart signer.service", "why": "regression: bare capital command still blocks"},
+    {"id": "b17b_bare_docker", "cmd": "docker restart signer.service", "why": "regression: bare docker capital command still blocks"}
+  ],
+  "must_allow": [
+    {"id": "a18_the_original_fp", "cmd": "cat > spec.md <<'EOF'\nTo restart the signer run: systemctl restart signer.service\nEOF", "why": "THE original false positive: pure heredoc-to-file authoring, one command, quoted delimiter, literal regular-file sink"},
+    {"id": "a19_append_form", "cmd": "cat >> spec.md <<'EOF'\nnote: systemctl restart signer.service\nEOF", "why": "append redirect form of the same pure authoring"}
+  ]
+}
